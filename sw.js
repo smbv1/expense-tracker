@@ -1,5 +1,5 @@
 /* Офлайн-кэш: отдаём из кэша сразу, в фоне подтягиваем свежую версию. */
-const CACHE = 'rashody-v1';
+const CACHE = 'rashody-v2';
 const ASSETS = [
   './', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',

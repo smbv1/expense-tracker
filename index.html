@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Расходы</title>
-<meta name="theme-color" content="#E9EFEC" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0C1F1C" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#0E1113">
+<meta name="color-scheme" content="dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Расходы">
 <meta name="format-detection" content="telephone=no">
 <link rel="manifest" href="manifest.webmanifest">
@@ -19,6 +19,12 @@
 <body>
 <main id="app">
   <section id="view-add" class="view" aria-label="Новый расход">
+    <button type="button" id="summary" class="summary" aria-label="Открыть аналитику">
+      <span class="stat"><small>Сегодня</small><b id="sum-today">0</b></span>
+      <span class="stat"><small id="sum-month-label">Месяц</small><b id="sum-month">0</b></span>
+      <svg class="go" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </button>
+
     <div class="topbar">
       <div id="accounts" class="chips" role="radiogroup" aria-label="Счёт"></div>
       <div id="currency" class="seg" role="radiogroup" aria-label="Валюта">
@@ -28,7 +34,6 @@
     </div>
 
     <div class="amount-zone">
-      <div id="today-total" class="today"></div>
       <div id="amount" class="amount" aria-live="polite"><span id="amount-num">0</span><span id="amount-cur" class="cur">с</span></div>
       <button type="button" id="rate-line" class="rate-line" hidden></button>
     </div>
@@ -53,16 +58,16 @@
     </div>
   </section>
 
-  <section id="view-list" class="view scroll" hidden aria-label="Операции"></section>
-  <section id="view-stats" class="view scroll" hidden aria-label="Итоги"></section>
+  <section id="view-list" class="view scroll" hidden aria-label="История"></section>
+  <section id="view-stats" class="view scroll" hidden aria-label="Аналитика"></section>
   <section id="view-settings" class="view scroll" hidden aria-label="Настройки"></section>
 </main>
 
 <nav id="tabs" class="tabs" aria-label="Разделы">
-  <button type="button" data-tab="add" class="on">Ввод</button>
-  <button type="button" data-tab="list">Операции</button>
-  <button type="button" data-tab="stats">Итоги</button>
-  <button type="button" data-tab="settings">Настройки</button>
+  <button type="button" data-tab="add" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg><span>Ввод</span></button>
+  <button type="button" data-tab="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h12M8 12h12M8 17h12"/><circle cx="4" cy="7" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="17" r="1"/></svg><span>История</span></button>
+  <button type="button" data-tab="stats"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg><span>Аналитика</span></button>
+  <button type="button" data-tab="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span>Ещё</span></button>
 </nav>
 
 <div id="toast" class="toast" hidden role="status"></div>

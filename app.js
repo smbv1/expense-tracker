@@ -47,6 +47,7 @@ const S = {
   tx: [], categories: [], accounts: [], settings: {},
   input: '', date: todayStr(), tab: 'add',
   period: 'month', cursor: todayStr(), listLimit: 150,
+  filterAcc: '', query: '', openCat: '',
 };
 
 const DEFAULT_CATEGORIES = [
@@ -56,6 +57,9 @@ const DEFAULT_CATEGORIES = [
 ];
 const DEFAULT_ACCOUNTS = ['Наличные', 'МБАНК'];
 const DEFAULT_RATE = 87.5;
+const PALETTE = ['#FF8A65', '#FFC531', '#4FC3F7', '#81C784', '#BA68C8', '#F06292', '#4DB6AC', '#9575CD', '#FFB74D', '#7986CB', '#A1887F', '#90A4AE'];
+const catColor = (c) => (c && /^#[0-9a-f]{6}$/i.test(c.color || '') ? c.color : c && c.id ? PALETTE[(c.order || 0) % PALETTE.length] : '#8C999F');
+const WIDE = window.matchMedia('(min-width: 900px)');
 
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -163,7 +167,7 @@ function renderAdd() {
   });
 
   $('cats').innerHTML = sortedCategories().map((c) =>
-    `<button type="button" class="cat" data-cat="${esc(c.id)}"><span class="em">${esc(c.emoji || '•')}</span><span class="nm">${esc(c.name)}</span></button>`
+    `<button type="button" class="cat" data-cat="${esc(c.id)}" style="--c:${catColor(c)}"><span class="em">${esc(c.emoji || '•')}</span><span class="nm">${esc(c.name)}</span></button>`
   ).join('');
 
   const isToday = S.date === todayStr();
@@ -172,8 +176,11 @@ function renderAdd() {
   $('date-input').value = S.date;
   $('date-input').max = todayStr();
 
-  const tt = sumKgs(S.tx.filter((t) => t.date === todayStr()));
-  $('today-total').textContent = tt ? 'Сегодня потрачено ' + money(tt, 'KGS') : '';
+  const today = todayStr();
+  $('sum-today').textContent = money(sumKgs(S.tx.filter((t) => t.date === today)), 'KGS');
+  const mName = MONTHS[new Date().getMonth()];
+  $('sum-month-label').textContent = mName[0].toUpperCase() + mName.slice(1);
+  $('sum-month').textContent = money(sumKgs(S.tx.filter((t) => t.date.startsWith(today.slice(0, 7)))), 'KGS');
   renderAmount();
 }
 
@@ -274,6 +281,10 @@ function openSheet({ title, fields, saveLabel, onSave, deleteLabel, onDelete }) 
   const html = [`<h3>${esc(title)}</h3>`];
   const one = (f) => {
     let control;
+    if (f.type === 'swatches') {
+      return `<div class="field"><span>${esc(f.label)}</span></div><div class="swatches" role="radiogroup" aria-label="${esc(f.label)}">` + f.options.map((v) =>
+        `<label style="--c:${v}"><input type="radio" name="${f.name}" value="${v}"${v === f.value ? ' checked' : ''} aria-label="Цвет ${v}"><i></i></label>`).join('') + '</div>';
+    }
     if (f.type === 'select') {
       control = `<select name="${f.name}">` + f.options.map(([v, l]) =>
         `<option value="${esc(v)}"${v === f.value ? ' selected' : ''}>${esc(l)}</option>`).join('') + '</select>';
@@ -312,7 +323,7 @@ $('sheet-back').addEventListener('click', async (ev) => {
   }
 });
 
-/* ================= операции ================= */
+/* ================= история ================= */
 function txSorted() {
   return S.tx.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.ts - a.ts));
 }
@@ -321,22 +332,42 @@ function txRow(t) {
   const sub = [accById(t.accountId).name, t.note].filter(Boolean).join(', ');
   const usd = t.currency === 'USD';
   return `<button type="button" class="row" data-tx="${esc(t.id)}">
-    <span class="em">${esc(c.emoji || '•')}</span>
+    <span class="em" style="--c:${catColor(c)}">${esc(c.emoji || '•')}</span>
     <span class="mid"><span class="t">${esc(c.name)}</span><span class="s">${esc(sub)}</span></span>
     <span class="sum">${usd ? money(t.amount, 'USD') : money(t.amount, 'KGS')}${usd ? `<small>${money(t.amountKgs, 'KGS')}</small>` : ''}</span>
   </button>`;
 }
 function renderList() {
   const v = $('view-list');
-  const all = txSorted();
+  if (!S.tx.length) {
+    v.innerHTML = '<h1>История</h1><div class="empty"><b>Пока пусто</b>Введите сумму и нажмите категорию. Расход появится здесь.</div>';
+    return;
+  }
+  if (S.filterAcc && !S.accounts.some((a) => a.id === S.filterAcc)) S.filterAcc = '';
+  const accs = S.accounts.filter((a) => !a.archived || a.id === S.filterAcc).sort((a, b) => a.order - b.order);
+  v.innerHTML = `<h1>История</h1>
+    <input type="search" id="search" class="search" placeholder="Поиск по категории или заметке" value="${esc(S.query)}" autocomplete="off" enterkeyhint="search">
+    <div class="chips filters">
+      <button type="button" class="chip${S.filterAcc ? '' : ' on'}" data-facc="">Все счета</button>
+      ${accs.map((a) => `<button type="button" class="chip${a.id === S.filterAcc ? ' on' : ''}" data-facc="${esc(a.id)}">${esc(a.name)}</button>`).join('')}
+    </div>
+    <div id="list-body"></div>`;
+  renderListBody();
+}
+function renderListBody() {
+  const q = S.query.trim().toLowerCase();
+  const all = txSorted().filter((t) =>
+    (!S.filterAcc || t.accountId === S.filterAcc) &&
+    (!q || catById(t.categoryId).name.toLowerCase().includes(q) || (t.note || '').toLowerCase().includes(q)));
+  const body = $('list-body');
   if (!all.length) {
-    v.innerHTML = '<h1>Операции</h1><div class="empty"><b>Пока пусто</b>Введите сумму на вкладке «Ввод» и нажмите категорию. Расход появится здесь.</div>';
+    body.innerHTML = '<div class="empty"><b>Ничего не найдено</b>Измените поиск или выберите «Все счета».</div>';
     return;
   }
   const totals = {};
   for (const t of all) totals[t.date] = (totals[t.date] || 0) + t.amountKgs;
   const shown = all.slice(0, S.listLimit);
-  const out = ['<h1>Операции</h1>'];
+  const out = [];
   let day = null;
   for (const t of shown) {
     if (t.date !== day) {
@@ -348,7 +379,7 @@ function renderList() {
   }
   out.push('</div>');
   if (all.length > shown.length) out.push('<p></p><button type="button" class="btn light" data-more>Показать ещё</button>');
-  v.innerHTML = out.join('');
+  body.innerHTML = out.join('');
 }
 
 function editTx(id) {
@@ -399,69 +430,97 @@ function editTx(id) {
   });
 }
 
-/* ================= итоги ================= */
+/* ================= аналитика ================= */
+function periodRange() {
+  const d = parseDate(S.cursor);
+  let from, to, label;
+  if (S.period === 'day') { from = to = S.cursor; label = dayLabel(S.cursor); }
+  else if (S.period === 'week') {
+    const a = new Date(d); a.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    const b = new Date(a); b.setDate(a.getDate() + 6);
+    from = dateStr(a); to = dateStr(b);
+    label = (a.getMonth() === b.getMonth() ? a.getDate() : a.getDate() + ' ' + MONTHS_GEN[a.getMonth()]) + ' – ' + b.getDate() + ' ' + MONTHS_GEN[b.getMonth()];
+  } else if (S.period === 'month') {
+    from = dateStr(new Date(d.getFullYear(), d.getMonth(), 1)); to = dateStr(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+    label = MONTHS[d.getMonth()] + ' ' + d.getFullYear(); label = label[0].toUpperCase() + label.slice(1);
+  } else { from = d.getFullYear() + '-01-01'; to = d.getFullYear() + '-12-31'; label = d.getFullYear() + ' год'; }
+  return { from, to, label, atEnd: to >= todayStr() };
+}
 function shiftCursor(dir) {
   const d = parseDate(S.cursor);
-  if (S.period === 'month') { d.setDate(1); d.setMonth(d.getMonth() + dir); }
-  else d.setDate(d.getDate() + dir);
-  S.cursor = dateStr(d);
-  if (S.cursor > todayStr()) S.cursor = todayStr();
+  if (S.period === 'day') d.setDate(d.getDate() + dir);
+  else if (S.period === 'week') d.setDate(d.getDate() + 7 * dir);
+  else if (S.period === 'month') { d.setDate(1); d.setMonth(d.getMonth() + dir); }
+  else { d.setDate(1); d.setFullYear(d.getFullYear() + dir); }
+  S.cursor = dateStr(d) > todayStr() ? todayStr() : dateStr(d);
+  S.openCat = '';
   renderStats();
 }
 function renderStats() {
   const v = $('view-stats');
-  const cur = parseDate(S.cursor);
-  const today = todayStr();
-  let list, label, atEnd;
-  if (S.period === 'month') {
-    const prefix = S.cursor.slice(0, 7);
-    list = S.tx.filter((t) => t.date.startsWith(prefix));
-    label = MONTHS[cur.getMonth()] + ' ' + cur.getFullYear();
-    label = label[0].toUpperCase() + label.slice(1);
-    atEnd = prefix === today.slice(0, 7);
-  } else {
-    list = S.tx.filter((t) => t.date === S.cursor);
-    label = dayLabel(S.cursor);
-    atEnd = S.cursor === today;
-  }
+  const { from, to, label, atEnd } = periodRange();
+  const list = S.tx.filter((t) => t.date >= from && t.date <= to);
   const total = sumKgs(list);
   const usd = round2(list.filter((t) => t.currency === 'USD').reduce((a, t) => a + t.amount, 0));
-  let sub = list.length ? plural(list.length, ['расход', 'расхода', 'расходов']) : '';
-  if (usd) sub += ', из них в долларах ' + money(usd, 'USD');
-  if (S.period === 'month' && total) {
-    const days = atEnd ? new Date().getDate() : new Date(cur.getFullYear(), cur.getMonth() + 1, 0).getDate();
-    sub += ', в среднем ' + money(Math.round(total / days), 'KGS') + ' в день';
+  const sub = [];
+  if (usd) sub.push('в долларах ' + money(usd, 'USD'));
+  if (S.period !== 'day' && total) {
+    const end = atEnd ? todayStr() : to;
+    const days = Math.round((parseDate(end) - parseDate(from)) / 864e5) + 1;
+    sub.push('в среднем ' + money(Math.round(total / days), 'KGS') + ' в день');
   }
 
-  const group = (key, nameOf) => {
-    const m = new Map();
-    for (const t of list) m.set(t[key], (m.get(t[key]) || 0) + t.amountKgs);
-    return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([id, sum]) => {
-      const pct = total ? (sum / total) * 100 : 0;
-      return `<div class="bar-row"><div class="bar-top"><span class="t">${esc(nameOf(id))}</span><span class="v">${money(sum, 'KGS')}<small>${Math.round(pct)}%</small></span></div><div class="bar"><i style="width:${Math.max(pct, 1.5).toFixed(1)}%"></i></div></div>`;
-    }).join('');
-  };
+  const sums = new Map();
+  for (const t of list) sums.set(t.categoryId, (sums.get(t.categoryId) || 0) + t.amountKgs);
+  const cats = [...sums.entries()].sort((a, b) => b[1] - a[1]).map(([id, sum]) => ({ id, sum, c: catById(id), pct: total ? (sum / total) * 100 : 0 }));
 
+  let acc = 0;
+  const gap = cats.length > 1 ? 0.7 : 0;
+  const arcs = cats.map((x) => {
+    const len = Math.max(x.pct - gap, 0.3);
+    const el = `<circle cx="21" cy="21" r="15.9155" stroke="${catColor(x.c)}" stroke-width="5" stroke-dasharray="${len.toFixed(2)} ${(100 - len).toFixed(2)}" stroke-dashoffset="${(-acc).toFixed(2)}"/>`;
+    acc += x.pct;
+    return el;
+  }).join('');
+  const totalText = fmt(total);
+
+  const catRows = cats.map((x) => {
+    const open = S.openCat === x.id;
+    const rows = open ? list.filter((t) => t.categoryId === x.id).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.ts - a.ts)) : [];
+    return `<button type="button" class="bar-row" data-open-cat="${esc(x.id)}" aria-expanded="${open}" style="--c:${catColor(x.c)}">
+        <span class="bar-top"><span class="dot"></span><span class="t">${esc((x.c.emoji ? x.c.emoji + ' ' : '') + x.c.name)}</span><span class="v">${money(x.sum, 'KGS')}<small>${Math.round(x.pct)}%</small></span></span>
+        <span class="bar" style="display:block"><i style="width:${Math.max(x.pct, 1.5).toFixed(1)}%"></i></span>
+      </button>${open ? `<div class="sub-list">${rows.map((t) => txRow(Object.assign({}, t, { note: [dayLabel(t.date).replace(/, ..$/, ''), t.note].filter(Boolean).join(', ') }))).join('')}</div>` : ''}`;
+  }).join('');
+
+  const accSums = new Map();
+  for (const t of list) accSums.set(t.accountId, (accSums.get(t.accountId) || 0) + t.amountKgs);
+  const accRows = [...accSums.entries()].sort((a, b) => b[1] - a[1]).map(([id, sum]) => {
+    const pct = total ? (sum / total) * 100 : 0;
+    return `<div class="bar-row"><span class="bar-top"><span class="t">${esc(accById(id).name)}</span><span class="v">${money(sum, 'KGS')}<small>${Math.round(pct)}%</small></span></span></div>`;
+  }).join('');
+
+  const seg = [['day', 'День'], ['week', 'Неделя'], ['month', 'Месяц'], ['year', 'Год']];
   v.innerHTML = `
-    <div class="period">
-      <div class="seg" role="radiogroup" aria-label="Период">
-        <button type="button" data-period="day" class="${S.period === 'day' ? 'on' : ''}">День</button>
-        <button type="button" data-period="month" class="${S.period === 'month' ? 'on' : ''}">Месяц</button>
-      </div>
-    </div>
+    <div class="period"><div class="seg" role="radiogroup" aria-label="Период">
+      ${seg.map(([k, l]) => `<button type="button" data-period="${k}" class="${S.period === k ? 'on' : ''}">${l}</button>`).join('')}
+    </div></div>
     <div class="nav">
       <button type="button" data-shift="-1" aria-label="Раньше">‹</button>
       <span class="lbl">${esc(label)}</span>
       <button type="button" data-shift="1" aria-label="Позже"${atEnd ? ' disabled' : ''}>›</button>
     </div>
-    <div class="total">${fmt(total)}<span class="cur">с</span></div>
-    <div class="total-sub">${esc(sub)}</div>
+    <div class="donut">
+      <svg viewBox="0 0 42 42" aria-hidden="true"><circle cx="21" cy="21" r="15.9155" stroke="var(--surface2)" stroke-width="5"/>${arcs}</svg>
+      <div class="hole"><b class="total${totalText.length > 9 ? ' long' : ''}">${totalText}${NBSP}с</b><small>${list.length ? plural(list.length, ['расход', 'расхода', 'расходов']) : 'расходов нет'}</small></div>
+    </div>
+    <div class="total-sub">${esc(sub.join(', '))}</div>
     ${list.length ? `
       <h2>По категориям</h2>
-      <div class="card">${group('categoryId', (id) => { const c = catById(id); return (c.emoji ? c.emoji + ' ' : '') + c.name; })}</div>
+      <div class="card">${catRows}</div>
       <h2>По счетам</h2>
-      <div class="card">${group('accountId', (id) => accById(id).name)}</div>
-    ` : `<div class="empty"><b>Расходов нет</b>${S.period === 'month' ? 'За этот месяц ничего не записано.' : 'За этот день ничего не записано.'}</div>`}
+      <div class="card">${accRows}</div>
+    ` : '<div class="empty">За этот период ничего не записано.</div>'}
   `;
 }
 function plural(n, forms) {
@@ -494,7 +553,7 @@ function renderSettings() {
 
     <h2>Категории</h2>
     <div class="card">
-      ${activeCategories().sort((a, b) => a.order - b.order).map((c) => `<button type="button" class="row" data-edit-cat="${esc(c.id)}"><span class="em">${esc(c.emoji || '•')}</span><span class="mid"><span class="t">${esc(c.name)}</span></span><span class="chev">Изменить</span></button>`).join('')}
+      ${activeCategories().sort((a, b) => a.order - b.order).map((c) => `<button type="button" class="row" data-edit-cat="${esc(c.id)}"><span class="em" style="--c:${catColor(c)}">${esc(c.emoji || '•')}</span><span class="mid"><span class="t">${esc(c.name)}</span></span><span class="chev">Изменить</span></button>`).join('')}
       <button type="button" class="row" data-cat-add><span class="mid"><span class="t">+ Добавить категорию</span></span></button>
     </div>
 
@@ -559,13 +618,14 @@ function editCategory(id) {
     fields: [
       { name: 'name', label: 'Название', type: 'text', value: c ? c.name : '', maxlength: 20, placeholder: 'Например, Бензин' },
       { name: 'emoji', label: 'Значок (эмодзи)', type: 'text', value: c ? c.emoji : '', maxlength: 8, placeholder: '⛽' },
+      { name: 'color', label: 'Цвет', type: 'swatches', value: c ? catColor(c) : PALETTE[S.categories.length % PALETTE.length], options: PALETTE },
     ],
     onSave: async (v) => {
       if (!v.name) return 'Введите название категории.';
       if (activeCategories().some((x) => x !== c && x.name.toLowerCase() === v.name.toLowerCase())) return 'Такая категория уже есть.';
-      if (c) { c.name = v.name; c.emoji = v.emoji; await dbPut('categories', c); }
+      if (c) { c.name = v.name; c.emoji = v.emoji; c.color = v.color; await dbPut('categories', c); }
       else {
-        const n = { id: uid(), name: v.name, emoji: v.emoji, order: Math.max(-1, ...S.categories.map((x) => x.order)) + 1 };
+        const n = { id: uid(), name: v.name, emoji: v.emoji, color: v.color, order: Math.max(-1, ...S.categories.map((x) => x.order)) + 1 };
         await dbPut('categories', n);
         S.categories.push(n);
       }
@@ -652,14 +712,17 @@ function refresh() {
   if (S.tab === 'settings') renderSettings();
 }
 function showTab(tab) {
+  if (WIDE.matches && tab === 'add') tab = 'list';
   S.tab = tab;
   for (const name of ['add', 'list', 'stats', 'settings']) $('view-' + name).hidden = name !== tab;
   document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
   if (tab === 'list') S.listLimit = 150;
-  if (tab === 'stats') S.cursor = todayStr();
+  if (tab === 'stats') { S.cursor = todayStr(); S.openCat = ''; }
   refresh();
   if (tab !== 'add') $('view-' + tab).scrollTop = 0;
 }
+WIDE.addEventListener('change', () => showTab(!WIDE.matches && S.tab === 'list' ? 'add' : S.tab));
+$('summary').addEventListener('click', () => { S.period = 'month'; showTab('stats'); });
 
 $('tabs').addEventListener('click', (e) => {
   const b = e.target.closest('[data-tab]');
@@ -700,13 +763,22 @@ $('note').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.b
 $('view-list').addEventListener('click', (e) => {
   const row = e.target.closest('[data-tx]');
   if (row) return editTx(row.dataset.tx);
-  if (e.target.closest('[data-more]')) { S.listLimit += 300; renderList(); }
+  const f = e.target.closest('[data-facc]');
+  if (f) { S.filterAcc = f.dataset.facc; S.listLimit = 150; return renderList(); }
+  if (e.target.closest('[data-more]')) { S.listLimit += 300; renderListBody(); }
+});
+$('view-list').addEventListener('input', (e) => {
+  if (e.target.id === 'search') { S.query = e.target.value; S.listLimit = 150; renderListBody(); }
 });
 $('view-stats').addEventListener('click', (e) => {
+  const row = e.target.closest('[data-tx]');
+  if (row) return editTx(row.dataset.tx);
   const p = e.target.closest('[data-period]');
-  if (p) { S.period = p.dataset.period; S.cursor = todayStr(); return renderStats(); }
+  if (p) { S.period = p.dataset.period; S.cursor = todayStr(); S.openCat = ''; return renderStats(); }
   const s = e.target.closest('[data-shift]');
-  if (s && !s.disabled) shiftCursor(Number(s.dataset.shift));
+  if (s && !s.disabled) return shiftCursor(Number(s.dataset.shift));
+  const c = e.target.closest('[data-open-cat]');
+  if (c) { S.openCat = S.openCat === c.dataset.openCat ? '' : c.dataset.openCat; renderStats(); }
 });
 $('view-settings').addEventListener('click', (e) => {
   const t = e.target;
