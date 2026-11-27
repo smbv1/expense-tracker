@@ -194,7 +194,7 @@ button.bar-row:active { background: var(--surface2); }
 
 /* ---------- всплывающая плашка ---------- */
 .toast {
-  position: fixed; left: calc(var(--sal) + 10px); right: calc(var(--sar) + 10px); bottom: calc(var(--sab) + 4px); z-index: 30;
+  position: fixed; left: calc(var(--sal) + 10px); right: calc(var(--sar) + 10px); top: calc(var(--sat) + 8px); z-index: 30;
   max-width: 540px; margin: 0 auto;
   display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 4px 4px 4px 16px;
   background: var(--ink); color: var(--bg); border-radius: 14px; font-weight: 600;
@@ -203,7 +203,7 @@ button.bar-row:active { background: var(--surface2); }
 }
 .toast span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .toast button { flex: none; height: 38px; padding: 0 14px; border-radius: 10px; background: var(--accent); color: var(--accent-ink); font-weight: 700; }
-@keyframes drop { from { transform: translateY(16px); opacity: 0; } }
+@keyframes drop { from { transform: translateY(-16px); opacity: 0; } }
 
 /* ---------- форма ---------- */
 .sheet-back { position: fixed; inset: 0; z-index: 20; background: rgba(0, 0, 0, .6); display: flex; align-items: flex-end; justify-content: center; }
