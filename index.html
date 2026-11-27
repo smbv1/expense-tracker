@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Расходы</title>
+<meta name="theme-color" content="#E9EFEC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0C1F1C" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Расходы">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main id="app">
+  <section id="view-add" class="view" aria-label="Новый расход">
+    <div class="topbar">
+      <div id="accounts" class="chips" role="radiogroup" aria-label="Счёт"></div>
+      <div id="currency" class="seg" role="radiogroup" aria-label="Валюта">
+        <button type="button" data-cur="KGS" role="radio">сом</button>
+        <button type="button" data-cur="USD" role="radio">$</button>
+      </div>
+    </div>
+
+    <div class="amount-zone">
+      <div id="today-total" class="today"></div>
+      <div id="amount" class="amount" aria-live="polite"><span id="amount-num">0</span><span id="amount-cur" class="cur">с</span></div>
+      <button type="button" id="rate-line" class="rate-line" hidden></button>
+    </div>
+
+    <div class="meta">
+      <label class="date-chip" id="date-chip">
+        <span id="date-label">Сегодня</span>
+        <input type="date" id="date-input" aria-label="Дата расхода">
+      </label>
+      <input type="text" id="note" class="note" placeholder="Заметка, если нужна" maxlength="120" autocomplete="off" enterkeyhint="done">
+    </div>
+
+    <div class="cats-wrap">
+      <div id="cats" class="cats" aria-label="Категория. Нажатие сохраняет расход"></div>
+    </div>
+
+    <div id="keypad" class="keypad" aria-label="Сумма">
+      <button type="button" data-k="1">1</button><button type="button" data-k="2">2</button><button type="button" data-k="3">3</button>
+      <button type="button" data-k="4">4</button><button type="button" data-k="5">5</button><button type="button" data-k="6">6</button>
+      <button type="button" data-k="7">7</button><button type="button" data-k="8">8</button><button type="button" data-k="9">9</button>
+      <button type="button" data-k=",">,</button><button type="button" data-k="0">0</button><button type="button" data-k="back" aria-label="Стереть">⌫</button>
+    </div>
+  </section>
+
+  <section id="view-list" class="view scroll" hidden aria-label="Операции"></section>
+  <section id="view-stats" class="view scroll" hidden aria-label="Итоги"></section>
+  <section id="view-settings" class="view scroll" hidden aria-label="Настройки"></section>
+</main>
+
+<nav id="tabs" class="tabs" aria-label="Разделы">
+  <button type="button" data-tab="add" class="on">Ввод</button>
+  <button type="button" data-tab="list">Операции</button>
+  <button type="button" data-tab="stats">Итоги</button>
+  <button type="button" data-tab="settings">Настройки</button>
+</nav>
+
+<div id="toast" class="toast" hidden role="status"></div>
+<div id="sheet-back" class="sheet-back" hidden>
+  <form id="sheet" class="sheet" novalidate></form>
+</div>
+<input type="file" id="import-file" accept=".json,application/json" hidden>
+
+<script src="app.js"></script>
+</body>
+</html>
