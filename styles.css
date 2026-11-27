@@ -306,3 +306,8 @@ button.bar-row:active { background: var(--surface2); }
   .imp-foot { flex-direction: row-reverse; gap: 8px; }
   .imp-foot .btn + .btn { margin-top: 0; }
 }
+
+/* облако */
+.row .s.bad { color: var(--danger); }
+#cloud-box .hint { margin-bottom: 4px; }
+.sheet .hint { margin: 4px 4px 14px; }
