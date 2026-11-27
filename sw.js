@@ -1,12 +1,18 @@
-/* Офлайн-кэш: отдаём из кэша сразу, в фоне подтягиваем свежую версию. */
-const CACHE = 'rashody-v4';
+/* Офлайн-кэш: отдаём из кэша сразу, в фоне подтягиваем свежую версию.
+   VERSION менять вместе с APP_VERSION в app.js: смена версии заставляет телефоны скачать новые файлы. */
+const VERSION = '1.3';
+const CACHE = 'rashody-' + VERSION;
 const ASSETS = [
   './', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches.open(CACHE)
+      .then((c) => c.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (e) => {

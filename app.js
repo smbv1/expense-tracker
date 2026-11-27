@@ -1,5 +1,9 @@
 'use strict';
 
+/* Версия приложения. При каждом выпуске менять здесь и в sw.js (VERSION), и дописывать CHANGELOG.md. */
+const APP_VERSION = '1.3';
+const APP_DATE = '27.11.2026';
+
 /* ================= хранилище (IndexedDB) ================= */
 const DB_NAME = 'expense-tracker';
 const STORES = ['tx', 'categories', 'accounts', 'settings'];
@@ -562,6 +566,12 @@ function renderSettings() {
     <button type="button" class="btn" data-export>Сохранить копию в файл</button>
     <button type="button" class="btn light" data-import>Восстановить из файла</button>
     <p class="hint">${esc(lastText)} Файл удобно класть в «Файлы» или iCloud Drive. Записей в приложении: ${S.tx.length}.</p>
+
+    <h2>О приложении</h2>
+    <div class="card">
+      <div class="row"><span class="mid"><span class="t">Версия ${APP_VERSION}</span><span class="s">от ${APP_DATE}</span></span></div>
+      <button type="button" class="row" data-update><span class="mid"><span class="t">Проверить обновление</span><span class="s">Скачает новую версию, если она вышла. Данные не затрагиваются</span></span></button>
+    </div>
   `;
 }
 
@@ -788,6 +798,7 @@ $('view-settings').addEventListener('click', (e) => {
   else if ((m = t.closest('[data-edit-acc]'))) editAccount(m.dataset.editAcc);
   else if (t.closest('[data-cat-add]')) editCategory(null);
   else if ((m = t.closest('[data-edit-cat]'))) editCategory(m.dataset.editCat);
+  else if (t.closest('[data-update]')) checkUpdate();
   else if (t.closest('[data-export]')) exportBackup();
   else if (t.closest('[data-import]')) $('import-file').click();
 });
@@ -797,12 +808,48 @@ $('import-file').addEventListener('change', async (e) => {
   if (f) await importBackup(f);
 });
 
+/* ---------- обновление ---------- */
+const hadController = 'serviceWorker' in navigator && !!navigator.serviceWorker.controller;
+let reloading = false;
+function reloadOnce() { if (!reloading) { reloading = true; location.reload(); } }
+if ('serviceWorker' in navigator) {
+  /* новая версия установилась: перезагружаемся сами, если не идёт ввод суммы */
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hadController && !S.input && $('sheet-back').hidden) reloadOnce();
+  });
+}
+async function checkUpdate() {
+  if (!('serviceWorker' in navigator)) return reloadOnce();
+  toast('Проверяю обновление…');
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (reg) await reg.update();
+  } catch (e) { /* нет сети: просто перезагрузим то, что есть */ }
+  setTimeout(reloadOnce, 2500);
+}
+
+/* ---------- высота экрана в установленном приложении на iPhone ----------
+   Со статус-баром поверх содержимого часть версий iOS считает высоту страницы
+   короче экрана на высоту статус-бара, и внизу остаётся пустая полоса. */
+function fixStandaloneHeight() {
+  if (!navigator.standalone) return;
+  const portrait = window.innerHeight >= window.innerWidth;
+  const full = portrait ? Math.max(screen.height, screen.width) : Math.min(screen.height, screen.width);
+  const h = window.innerHeight < full ? full + 'px' : '';
+  document.documentElement.style.height = h;
+  document.body.style.height = h;
+}
+fixStandaloneHeight();
+window.addEventListener('resize', fixStandaloneHeight);
+window.addEventListener('orientationchange', () => setTimeout(fixStandaloneHeight, 300));
+
 /* при возврате в приложение на следующий день дата снова «сегодня» */
 let lastSeenDay = todayStr();
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   if (todayStr() !== lastSeenDay) { lastSeenDay = todayStr(); S.date = lastSeenDay; }
   refresh();
+  if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistration().then((r) => r && r.update()).catch(() => {});
 });
 
 (async function start() {

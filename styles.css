@@ -125,7 +125,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 }
 
 /* ---------- вкладки ---------- */
-.tabs { flex: none; display: flex; background: var(--surface); border-top: 1px solid var(--line); padding: 0 var(--sar) max(0px, calc(var(--sab) - 16px)) var(--sal); }
+.tabs { flex: none; display: flex; background: var(--surface); border-top: 1px solid var(--line); padding: 0 var(--sar) max(6px, calc(var(--sab) - 16px)) var(--sal); }
 .tabs button { flex: 1; height: 54px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
 .tabs svg { width: 24px; height: 24px; }
 .tabs button.on { color: var(--accent); }
