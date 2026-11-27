@@ -1,7 +1,7 @@
 'use strict';
 
 /* Версия приложения. При каждом выпуске менять здесь и в sw.js (VERSION), и дописывать CHANGELOG.md. */
-const APP_VERSION = '1.4';
+const APP_VERSION = '1.5';
 const APP_DATE = '27.11.2026';
 
 /* ================= хранилище (IndexedDB) ================= */
@@ -12,13 +12,16 @@ let dbp = null;
 function openDb() {
   if (dbp) return dbp;
   dbp = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
+    const req = indexedDB.open(DB_NAME, 2);
     req.onupgradeneeded = () => {
       const db = req.result;
-      db.createObjectStore('tx', { keyPath: 'id' });
-      db.createObjectStore('categories', { keyPath: 'id' });
-      db.createObjectStore('accounts', { keyPath: 'id' });
-      db.createObjectStore('settings', { keyPath: 'key' });
+      const has = (n) => db.objectStoreNames.contains(n);
+      if (!has('tx')) db.createObjectStore('tx', { keyPath: 'id' });
+      if (!has('categories')) db.createObjectStore('categories', { keyPath: 'id' });
+      if (!has('accounts')) db.createObjectStore('accounts', { keyPath: 'id' });
+      if (!has('settings')) db.createObjectStore('settings', { keyPath: 'key' });
+      /* версия 2: очередь изменений, которые ещё не ушли в облако */
+      if (!has('outbox')) db.createObjectStore('outbox', { keyPath: 'k' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -43,8 +46,25 @@ const dbAll = (store) => dbTx([store], 'readonly', (t) => {
   r.onsuccess = () => box.push(...r.result);
   return box;
 });
-const dbPut = (store, value) => dbTx([store], 'readwrite', (t) => { t.objectStore(store).put(value); });
-const dbDel = (store, key) => dbTx([store], 'readwrite', (t) => { t.objectStore(store).delete(key); });
+
+/* Очередь для облака. Каждое изменение записи отмечается в той же транзакции,
+   поэтому без сети ничего не теряется: отметка лежит, пока запись не уйдёт в облако. */
+const SYNCED_SETTINGS = ['usdRate', 'merchantRules'];
+function mark(t, store, id, deleted, mtime) {
+  if (store === 'settings' && !SYNCED_SETTINGS.includes(id)) return;
+  t.objectStore('outbox').put({ k: store + '|' + id, store, id, mtime: mtime || Date.now(), deleted: !!deleted });
+}
+function syncKick() { if (window.Sync) window.Sync.kick(); }
+const dbPut = (store, value) => dbTx([store, 'outbox'], 'readwrite', (t) => {
+  t.objectStore(store).put(value);
+  mark(t, store, store === 'settings' ? value.key : value.id);
+}).then(syncKick);
+const dbDel = (store, key) => dbTx([store, 'outbox'], 'readwrite', (t) => {
+  t.objectStore(store).delete(key);
+  mark(t, store, key, true);
+}).then(syncKick);
+/* запись настройки без отметки для облака (служебные данные самой синхронизации) */
+const dbPutRaw = (store, value) => dbTx([store], 'readwrite', (t) => { t.objectStore(store).put(value); });
 
 /* ================= состояние ================= */
 const S = {
@@ -280,8 +300,8 @@ function toast(text, actionLabel, action) {
 
 /* ================= форма в выезжающей панели ================= */
 let sheetCtx = null;
-function openSheet({ title, fields, saveLabel, onSave, deleteLabel, onDelete }) {
-  sheetCtx = { fields, onSave, onDelete };
+function openSheet({ title, fields, saveLabel, onSave, deleteLabel, onDelete, extras, note }) {
+  sheetCtx = { fields, onSave, onDelete, extras };
   const html = [`<h3>${esc(title)}</h3>`];
   const one = (f) => {
     let control;
@@ -293,34 +313,51 @@ function openSheet({ title, fields, saveLabel, onSave, deleteLabel, onDelete }) 
       control = `<select name="${f.name}">` + f.options.map(([v, l]) =>
         `<option value="${esc(v)}"${v === f.value ? ' selected' : ''}>${esc(l)}</option>`).join('') + '</select>';
     } else {
-      const attrs = f.type === 'decimal' ? 'type="text" inputmode="decimal"' : f.type === 'date' ? `type="date" max="${todayStr()}"` : 'type="text"';
-      control = `<input name="${f.name}" ${attrs} value="${esc(f.value)}" autocomplete="off"${f.maxlength ? ` maxlength="${f.maxlength}"` : ''}${f.placeholder ? ` placeholder="${esc(f.placeholder)}"` : ''}>`;
+      const attrs = f.type === 'decimal' ? 'type="text" inputmode="decimal"' : f.type === 'date' ? `type="date" max="${todayStr()}"`
+        : f.type === 'email' ? 'type="email" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck="false"'
+        : f.type === 'password' ? 'type="password"' : 'type="text"';
+      control = `<input name="${f.name}" ${attrs} value="${esc(f.value)}" autocomplete="${f.autocomplete || 'off'}"${f.maxlength ? ` maxlength="${f.maxlength}"` : ''}${f.placeholder ? ` placeholder="${esc(f.placeholder)}"` : ''}>`;
     }
     return `<label class="field"><span>${esc(f.label)}</span>${control}</label>`;
   };
   for (const f of fields) {
     html.push(Array.isArray(f) ? `<div class="two">${f.map(one).join('')}</div>` : one(f));
   }
+  if (note) html.push(`<p class="hint">${esc(note)}</p>`);
   html.push('<div class="err" id="sheet-err" hidden></div>');
   html.push(`<button class="btn" type="submit">${esc(saveLabel || 'Сохранить')}</button>`);
   if (onDelete) html.push(`<button class="btn danger" type="button" data-sheet-delete>${esc(deleteLabel || 'Удалить')}</button>`);
+  (extras || []).forEach((x, i) => html.push(`<button class="btn light" type="button" data-sheet-extra="${i}">${esc(x.label)}</button>`));
   html.push('<button class="btn light" type="button" data-sheet-close>Отмена</button>');
   $('sheet').innerHTML = html.join('');
   $('sheet-back').hidden = false;
 }
-function closeSheet() { $('sheet-back').hidden = true; sheetCtx = null; }
+function closeSheet() { $('sheet-back').hidden = true; sheetCtx = null; syncKick(); }
+function sheetValues() {
+  const values = {};
+  new FormData($('sheet')).forEach((v, k) => { values[k] = String(v).trim(); });
+  return values;
+}
+let sheetBusy = false;
+async function sheetRun(fn) {
+  if (sheetBusy) return;
+  sheetBusy = true;
+  $('sheet-err').hidden = true;
+  try {
+    const err = await fn(sheetValues());
+    if (err) sheetError(err); else if (err !== false) closeSheet();
+  } finally { sheetBusy = false; }
+}
 function sheetError(msg) { const e = $('sheet-err'); e.textContent = msg; e.hidden = false; }
 
 $('sheet').addEventListener('submit', async (ev) => {
   ev.preventDefault();
-  if (!sheetCtx) return;
-  const values = {};
-  new FormData($('sheet')).forEach((v, k) => { values[k] = String(v).trim(); });
-  const err = await sheetCtx.onSave(values);
-  if (err) sheetError(err); else closeSheet();
+  if (sheetCtx) await sheetRun(sheetCtx.onSave);
 });
 $('sheet-back').addEventListener('click', async (ev) => {
   if (ev.target === $('sheet-back') || ev.target.closest('[data-sheet-close]')) return closeSheet();
+  const extra = ev.target.closest('[data-sheet-extra]');
+  if (extra && sheetCtx) return sheetRun(sheetCtx.extras[Number(extra.dataset.sheetExtra)].onClick);
   if (ev.target.closest('[data-sheet-delete]') && sheetCtx) {
     const done = await sheetCtx.onDelete();
     if (done !== false) closeSheet();
@@ -536,10 +573,14 @@ function plural(n, forms) {
 function renderSettings() {
   const v = $('view-settings');
   const last = S.settings.lastBackup;
-  const stale = S.tx.length && (!last || Date.now() - last > 14 * 864e5);
+  const cloud = !!(window.Sync && window.Sync.signedIn());
+  const stale = !cloud && S.tx.length && (!last || Date.now() - last > 14 * 864e5);
   const lastText = last ? 'Последняя копия: ' + dayLabel(dateStr(new Date(last))).toLowerCase() + '.' : 'Копию ещё не делали.';
   v.innerHTML = `
     <h1>Настройки</h1>
+
+    <h2>Облако</h2>
+    <div id="cloud-box">${window.Sync ? window.Sync.html() : ''}</div>
 
     <h2>Курс доллара</h2>
     <div class="card">
@@ -704,19 +745,28 @@ async function importBackup(file) {
     (S.tx.length ? `Сейчас в приложении ${S.tx.length}. Текущие данные будут заменены данными из файла. Продолжить?` : 'Восстановить?');
   if (!confirm(msg)) return;
   const rate = d.settings && d.settings.usdRate > 0 ? d.settings.usdRate : S.settings.usdRate;
-  await dbTx(STORES, 'readwrite', (t) => {
+  await dbTx([...STORES, 'outbox'], 'readwrite', (t) => {
     for (const s of ['tx', 'accounts', 'categories']) {
       const os = t.objectStore(s);
       os.clear();
-      d[s].forEach((x, i) => os.put(s === 'tx' ? Object.assign({ ts: 0, rate: 1, note: '' }, x) : Object.assign({ order: i }, x)));
+      /* для облака: то, чего нет в файле, удаляется, остальное заменяется */
+      const keep = new Set(d[s].map((x) => x.id));
+      S[s].forEach((x) => { if (!keep.has(x.id)) mark(t, s, x.id, true); });
+      d[s].forEach((x, i) => {
+        os.put(s === 'tx' ? Object.assign({ ts: 0, rate: 1, note: '' }, x) : Object.assign({ order: i }, x));
+        mark(t, s, x.id);
+      });
     }
     t.objectStore('settings').put({ key: 'usdRate', value: rate });
     const mr = d.settings && d.settings.merchantRules;
     t.objectStore('settings').put({ key: 'merchantRules', value: mr && typeof mr === 'object' && !Array.isArray(mr) ? mr : {} });
+    mark(t, 'settings', 'usdRate');
+    mark(t, 'settings', 'merchantRules');
     t.objectStore('settings').put({ key: 'lastBackup', value: Date.now() });
   });
   await load();
   refresh();
+  syncKick();
   toast('Данные восстановлены');
 }
 
@@ -805,6 +855,7 @@ $('view-settings').addEventListener('click', (e) => {
   else if (t.closest('[data-cat-add]')) editCategory(null);
   else if ((m = t.closest('[data-edit-cat]'))) editCategory(m.dataset.editCat);
   else if (t.closest('[data-update]')) checkUpdate();
+  else if ((m = t.closest('[data-cloud]'))) window.Sync.action(m.dataset.cloud);
   else if (t.closest('[data-statement]')) $('statement-file').click();
   else if (t.closest('[data-export]')) exportBackup();
   else if (t.closest('[data-import]')) $('import-file').click();
@@ -856,6 +907,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   if (todayStr() !== lastSeenDay) { lastSeenDay = todayStr(); S.date = lastSeenDay; }
   refresh();
+  syncKick();
   if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistration().then((r) => r && r.update()).catch(() => {});
 });
 
@@ -867,6 +919,7 @@ document.addEventListener('visibilitychange', () => {
     return;
   }
   showTab('add');
+  if (window.Sync) window.Sync.start();
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('sw.js').catch(() => {});

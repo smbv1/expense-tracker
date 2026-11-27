@@ -267,11 +267,13 @@ if (typeof document !== 'undefined') (function () {
           note: it.merchant, importKey: it.importKey,
         };
       });
-      await dbTx(['tx', 'categories', 'settings'], 'readwrite', (t) => {
-        newCats.forEach((c) => t.objectStore('categories').put(c));
-        txs.forEach((x) => t.objectStore('tx').put(x));
+      await dbTx(['tx', 'categories', 'settings', 'outbox'], 'readwrite', (t) => {
+        newCats.forEach((c) => { t.objectStore('categories').put(c); mark(t, 'categories', c.id); });
+        txs.forEach((x) => { t.objectStore('tx').put(x); mark(t, 'tx', x.id); });
         t.objectStore('settings').put({ key: 'merchantRules', value: rules });
+        mark(t, 'settings', 'merchantRules');
       });
+      syncKick();
       S.categories.push(...newCats);
       S.tx.push(...txs);
       S.settings.merchantRules = rules;
