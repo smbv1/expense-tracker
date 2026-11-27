@@ -1,7 +1,7 @@
 'use strict';
 
 /* Версия приложения. При каждом выпуске менять здесь и в sw.js (VERSION), и дописывать CHANGELOG.md. */
-const APP_VERSION = '1.3';
+const APP_VERSION = '1.4';
 const APP_DATE = '27.11.2026';
 
 /* ================= хранилище (IndexedDB) ================= */
@@ -561,6 +561,10 @@ function renderSettings() {
       <button type="button" class="row" data-cat-add><span class="mid"><span class="t">+ Добавить категорию</span></span></button>
     </div>
 
+    <h2>Выписка из банка</h2>
+    <button type="button" class="btn light" data-statement>Импорт выписки МБАНК</button>
+    <p class="hint">В приложении МБАНК сформируйте выписку по счёту в формате Excel (.xls) и выберите её здесь. Перед сохранением вы увидите список расходов и сможете поправить категории. Файл никуда не отправляется.</p>
+
     <h2>Резервная копия</h2>
     ${stale ? '<div class="warn">Данные хранятся только в этом телефоне. Сохраните копию, чтобы не потерять их.</div>' : ''}
     <button type="button" class="btn" data-export>Сохранить копию в файл</button>
@@ -657,7 +661,7 @@ function editCategory(id) {
 async function exportBackup() {
   const data = {
     app: 'expense-tracker', version: 1, exportedAt: new Date().toISOString(),
-    settings: { usdRate: S.settings.usdRate },
+    settings: { usdRate: S.settings.usdRate, merchantRules: S.settings.merchantRules || {} },
     accounts: S.accounts, categories: S.categories, tx: S.tx,
   };
   const name = 'rashody-' + todayStr() + '.json';
@@ -707,6 +711,8 @@ async function importBackup(file) {
       d[s].forEach((x, i) => os.put(s === 'tx' ? Object.assign({ ts: 0, rate: 1, note: '' }, x) : Object.assign({ order: i }, x)));
     }
     t.objectStore('settings').put({ key: 'usdRate', value: rate });
+    const mr = d.settings && d.settings.merchantRules;
+    t.objectStore('settings').put({ key: 'merchantRules', value: mr && typeof mr === 'object' && !Array.isArray(mr) ? mr : {} });
     t.objectStore('settings').put({ key: 'lastBackup', value: Date.now() });
   });
   await load();
@@ -799,6 +805,7 @@ $('view-settings').addEventListener('click', (e) => {
   else if (t.closest('[data-cat-add]')) editCategory(null);
   else if ((m = t.closest('[data-edit-cat]'))) editCategory(m.dataset.editCat);
   else if (t.closest('[data-update]')) checkUpdate();
+  else if (t.closest('[data-statement]')) $('statement-file').click();
   else if (t.closest('[data-export]')) exportBackup();
   else if (t.closest('[data-import]')) $('import-file').click();
 });

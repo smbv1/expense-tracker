@@ -268,3 +268,41 @@ button.bar-row:active { background: var(--surface2); }
 @media (display-mode: standalone) {
   html, body { height: 100vh; }
 }
+
+/* ---------- импорт выписки ---------- */
+.import-view { position: fixed; inset: 0; z-index: 25; display: flex; flex-direction: column; background: var(--bg); padding: var(--sat) var(--sar) 0 var(--sal); }
+.imp-head, .imp-list, .imp-foot { width: 100%; max-width: 680px; margin: 0 auto; }
+.imp-head { flex: none; padding: 14px 16px 10px; }
+.imp-head h3 { font-family: var(--round); font-size: 22px; margin: 0 0 4px; }
+.imp-head .hint { margin: 0 0 10px; }
+.imp-tools { display: flex; align-items: center; gap: 10px; }
+.imp-acc { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
+.imp-acc select, .imp-row select {
+  min-width: 0; height: 38px; border-radius: 10px; border: 0; background: var(--surface2); padding: 0 10px; font-size: 15px;
+  -webkit-appearance: none; appearance: none; text-overflow: ellipsis;
+}
+.imp-acc select { flex: 1; max-width: 220px; }
+.imp-list { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 16px 12px; }
+.imp-row {
+  display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; grid-template-areas: "check mid sum" "check cat cat";
+  gap: 6px 10px; align-items: center; padding: 10px 12px; margin-bottom: 6px; background: var(--surface); border-radius: 14px;
+}
+.imp-row.off { opacity: .45; }
+.imp-check { grid-area: check; position: relative; width: 36px; height: 44px; display: flex; align-items: center; justify-content: center; }
+.imp-check input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; margin: 0; }
+.imp-check i { width: 24px; height: 24px; border-radius: 8px; box-shadow: inset 0 0 0 2px var(--muted); }
+.imp-check input:checked + i { background: var(--accent); box-shadow: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232B2100' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 12.5l4 4 8-9'/%3E%3C/svg%3E"); }
+.imp-check input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }
+.imp-row .mid { grid-area: mid; min-width: 0; }
+.imp-row .t { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-row .s { display: block; color: var(--muted); font-size: 13.5px; }
+.imp-row .s b { color: var(--accent); font-weight: 600; }
+.imp-row .sum { grid-area: sum; font-family: var(--round); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.imp-row select { grid-area: cat; width: 100%; }
+.imp-foot { flex: none; display: flex; flex-direction: column; padding: 10px 16px calc(var(--sab) + 12px); border-top: 1px solid var(--line); }
+.btn:disabled { opacity: .5; }
+@media (min-width: 620px) {
+  .imp-row { grid-template-columns: 36px minmax(0, 1fr) auto 200px; grid-template-areas: "check mid sum cat"; }
+  .imp-foot { flex-direction: row-reverse; gap: 8px; }
+  .imp-foot .btn + .btn { margin-top: 0; }
+}

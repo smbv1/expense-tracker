@@ -1,9 +1,9 @@
 /* Офлайн-кэш: отдаём из кэша сразу, в фоне подтягиваем свежую версию.
    VERSION менять вместе с APP_VERSION в app.js: смена версии заставляет телефоны скачать новые файлы. */
-const VERSION = '1.3';
+const VERSION = '1.4';
 const CACHE = 'rashody-' + VERSION;
 const ASSETS = [
-  './', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest',
+  './', 'index.html', 'styles.css', 'app.js', 'import.js', 'vendor/xlsx.core.min.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
 

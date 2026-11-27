@@ -75,7 +75,25 @@
   <form id="sheet" class="sheet" novalidate></form>
 </div>
 <input type="file" id="import-file" accept=".json,application/json" hidden>
+<input type="file" id="statement-file" accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+
+<section id="import-view" class="import-view" hidden aria-label="Импорт выписки">
+  <header class="imp-head">
+    <h3>Импорт выписки</h3>
+    <p id="import-info" class="hint"></p>
+    <div class="imp-tools">
+      <label class="imp-acc"><span>На счёт</span><select id="import-account"></select></label>
+      <button type="button" id="import-toggle" class="chip">Снять все</button>
+    </div>
+  </header>
+  <div id="import-list" class="imp-list"></div>
+  <footer class="imp-foot">
+    <button type="button" id="import-save" class="btn">Импортировать</button>
+    <button type="button" id="import-cancel" class="btn light">Отмена</button>
+  </footer>
+</section>
 
 <script src="app.js"></script>
+<script src="import.js"></script>
 </body>
 </html>
